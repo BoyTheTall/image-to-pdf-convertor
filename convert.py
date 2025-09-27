@@ -22,8 +22,7 @@ def convert_single_image_to_pdf(image_dir, output_folder):
     file.close()
     print("converted image successfully")
 
-#this grabs the images in a folder and sorts them before conversion
-def convert_multiple_images(images_dir_folder, output_folder):
+def generate_image_list(images_dir_folder):
     images = []
     for fname in os.listdir(images_dir_folder):
         if not fname.endswith((".jpg", ".png", ".jpeg")):
@@ -34,8 +33,12 @@ def convert_multiple_images(images_dir_folder, output_folder):
             continue
         images.append(path)
     images.sort()
+    return images
+
+#this grabs the images in a folder and sorts them before conversion
+def convert_multiple_images(images, output_folder, filename):
     create_folder(output_folder)
-    with open(f"{output_folder}/{create_output_file_name(images_dir_folder)}.pdf", "wb") as f:
+    with open(f"{output_folder}/{filename}.pdf", "wb") as f:
         f.write(im.convert(images))
     
 def create_output_file_name(images_dir_folder):
@@ -45,4 +48,4 @@ def create_output_file_name(images_dir_folder):
         return images_dir_folder.split("\\")[-1]
     
 
-convert_multiple_images("snek", "sponge")
+convert_multiple_images(generate_image_list("snek"), "sponge", "ching cheng hanji")
