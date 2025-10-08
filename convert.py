@@ -62,7 +62,22 @@ class ConvertorUI(QtWidgets.QMainWindow):
         self.show()
         
         #add the function bindings
-        self.openFile()
+        self.btnOpenFolder.clicked.connect(self.openFolder)
+        self.btnOpenImage.clicked.connect(self.openImage)
+        self.btnAddFolder.clicked.connect(self.addFolder)
+        self.btnAddImage.clicked.connect(self.addImage)
+    
+    def addImage(self):
+          self.openFile(add_to_existing_list=True)
+              
+    def addFolder(self):
+        self.openFolder(add_to_existing_list=True)
+    
+    def openImage(self):
+        self.openFile(add_to_existing_list=False)
+    
+    def openFolder(self):
+        self.openFolder(add_to_existing_list=False)
         
     def openFileDialogue(self, folder_mode=True):
         dialog = QtWidgets.QFileDialog(self)
@@ -76,12 +91,36 @@ class ConvertorUI(QtWidgets.QMainWindow):
             return filenames
         
     #Will add one file to the global image list
-    def openFile(self):
+    def openFile(self, add_to_existing_list = False):
         file_list = self.openFileDialogue(folder_mode=False)
         if(file_list != None):
-            self.globalImageList.append(file_list[0])
+            if add_to_existing_list:
+                self.globalImageList.append(file_list[0])
+            else:
+                self.globalImageList.clear() #flushing current list
+                self.globalImageList.append(file_list[0])
         else:
             message = "No Image was selected"
+            title = "Error :'("
+            messages.display_message(message, title, messages.ERROR_MSG)
+    
+    def openFolder(self, add_to_existing_list = False):
+        folder = self.openFileDialogue()
+        if(folder != None):
+            message = "Sort image list automatically?"
+            result = messages.display_option_message(message, "Sort Do I?")
+            if result == True:
+                if add_to_existing_list:
+                    self.globalImageList.clear()
+                self.globalImageList.append(generate_image_list(folder[0]))
+                
+            else:
+                if add_to_existing_list:
+                    self.globalImageList.append(generate_image_list(sort_pictures=False))
+                else:    
+                    self.globalImageList = generate_image_list(sort_pictures=False)
+        else:
+            message = "No folder was selected"
             title = "Error :'("
             messages.display_message(message, title, messages.ERROR_MSG)
         
