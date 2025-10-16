@@ -1,8 +1,10 @@
 import img2pdf as im
 import PIL
 import os, sys
+from PyQt6.QtCore import QSize
 from PyQt6 import QtWidgets, uic
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QAbstractItemView
+from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon, QColor
 import messages
 
 def create_folder(folder_dir):
@@ -55,14 +57,29 @@ def create_output_file_name(images_dir_folder):
 
 class ConvertorUI(QtWidgets.QMainWindow):
     globalImageList = []
+    defaultFileDirectoryText =  None
+    globalImageModel = None #this is for the qListView 
     
     def __init__(self):
         super(ConvertorUI, self).__init__()
         uic.loadUi("convertorUI.ui", self)
         self.show()
-        
+        self.defaultFileDirectoryText = self.lblFileDirectory.text()
+        #Image models
+        self.globalImageModel = QStandardItemModel()
+        self.tblImagesList.setFlow(QtWidgets.QListView.Flow.TopToBottom)
+        self.tblImagesList.setMovement(QtWidgets.QListView.Movement.Snap)
+        self.tblImagesList.setViewMode(QtWidgets.QListView.ViewMode.ListMode)
+        self.tblImagesList.setGridSize(QSize(120, 120))
+        self.tblImagesList.setIconSize(QSize(120,120))
+        self.tblImagesList.setSpacing(10)
+        self.tblImagesList.setDragEnabled(True)
+        self.tblImagesList.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.tblImagesList.setAcceptDrops(True)
+        self.tblImagesList.setDropIndicatorShown(True)
+        self.tblImagesList.setWrapping(False)
         #add the function bindings
-        self.btnOpenFolder.clicked.connect(self.openFolder)
+        self.btnOpenFolder.clicked.connect(self.btnOpenFolderFunction)
         self.btnOpenImage.clicked.connect(self.openImage)
         self.btnAddFolder.clicked.connect(self.addFolder)
         self.btnAddImage.clicked.connect(self.addImage)
@@ -76,8 +93,9 @@ class ConvertorUI(QtWidgets.QMainWindow):
     def openImage(self):
         self.openFile(add_to_existing_list=False)
     
-    def openFolder(self):
+    def btnOpenFolderFunction(self):
         self.openFolder(add_to_existing_list=False)
+        self.addImagesToListView()
         
     def openFileDialogue(self, folder_mode=True):
         dialog = QtWidgets.QFileDialog(self)
@@ -88,6 +106,8 @@ class ConvertorUI(QtWidgets.QMainWindow):
         dialog.setViewMode(QtWidgets.QFileDialog.ViewMode.List)
         if dialog.exec():
             filenames = dialog.selectedFiles()
+            if(folder_mode == True):
+                self.lblFileDirectory.setText(self.defaultFileDirectoryText + ": " + filenames[0])
             return filenames
         
     #Will add one file to the global image list
@@ -99,6 +119,7 @@ class ConvertorUI(QtWidgets.QMainWindow):
             else:
                 self.globalImageList.clear() #flushing current list
                 self.globalImageList.append(file_list[0])
+                
         else:
             message = "No Image was selected"
             title = "Error :'("
@@ -109,12 +130,15 @@ class ConvertorUI(QtWidgets.QMainWindow):
         if(folder != None):
             message = "Sort image list automatically?"
             result = messages.display_option_message(message, "Sort Do I?")
-            if result == True:
+            if result == True: ## sorted images
                 if add_to_existing_list:
+                    self.globalImageList = self.globalImageList + generate_image_list(folder[0])
+                       
+                else:
                     self.globalImageList.clear()
-                self.globalImageList.append(generate_image_list(folder[0]))
+                    self.globalImageList = generate_image_list(folder[0])
                 
-            else:
+            else: #unsorted images
                 if add_to_existing_list:
                     self.globalImageList.append(generate_image_list(sort_pictures=False))
                 else:    
@@ -123,6 +147,17 @@ class ConvertorUI(QtWidgets.QMainWindow):
             message = "No folder was selected"
             title = "Error :'("
             messages.display_message(message, title, messages.ERROR_MSG)
+    
+    def addImagesToListView(self):
+        for imagePath in self.globalImageList:
+            item = QStandardItem()
+            item.setIcon(QIcon(imagePath))
+            item.setBackground(QColor("#2e2e2e"))  # Dark background
+            item.setForeground(QColor("#ffffff"))  # Text color
+            item.setText(imagePath)
+            self.globalImageModel.appendRow(item)
+            
+        self.tblImagesList.setModel(self.globalImageModel)
         
 def launch():
     app = QApplication(sys.argv)
