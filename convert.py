@@ -4,9 +4,9 @@ import os, sys
 from PyQt6.QtCore import QSize
 from PyQt6 import QtWidgets, uic
 from PyQt6.QtWidgets import QApplication, QAbstractItemView
-from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon, QColor
+from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon
 import messages
-
+#add the filters so that the save file type is automatically a pdf
 def create_folder(folder_dir):
     try:
         os.mkdir(folder_dir)
@@ -72,6 +72,7 @@ class ConvertorUI(QtWidgets.QMainWindow):
         self.tblImagesList.setViewMode(QtWidgets.QListView.ViewMode.ListMode)
         self.tblImagesList.setGridSize(QSize(120, 120))
         self.tblImagesList.setIconSize(QSize(120,120))
+        self.tblImagesList.setDragDropOverwriteMode(False)
         self.tblImagesList.setSpacing(10)
         self.tblImagesList.setDragEnabled(True)
         self.tblImagesList.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
@@ -83,6 +84,7 @@ class ConvertorUI(QtWidgets.QMainWindow):
         self.btnOpenImage.clicked.connect(self.openImage)
         self.btnAddFolder.clicked.connect(self.addFolder)
         self.btnAddImage.clicked.connect(self.addImage)
+        self.btnSavePDF.clicked.connect(self.btnSaveFileFunction)
     
     def addImage(self):
           self.openFile(add_to_existing_list=True)
@@ -96,7 +98,10 @@ class ConvertorUI(QtWidgets.QMainWindow):
     def btnOpenFolderFunction(self):
         self.openFolder(add_to_existing_list=False)
         self.addImagesToListView()
-        
+    
+    def btnSaveFileFunction(self):
+        self.saveFileDialog()
+          
     def openFileDialogue(self, folder_mode=True):
         dialog = QtWidgets.QFileDialog(self)
         if folder_mode:
@@ -148,12 +153,20 @@ class ConvertorUI(QtWidgets.QMainWindow):
             title = "Error :'("
             messages.display_message(message, title, messages.ERROR_MSG)
     
+    def saveFileDialog(self):
+        dialog = QtWidgets.QFileDialog(self)
+        dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptMode.AcceptSave)
+        if dialog.exec():
+            filename = dialog.selectedFiles()
+            print(filename)
+            return filename[0]
+    
     def addImagesToListView(self):
         for imagePath in self.globalImageList:
             item = QStandardItem()
             item.setIcon(QIcon(imagePath))
-            item.setBackground(QColor("#2e2e2e"))  # Dark background
-            item.setForeground(QColor("#ffffff"))  # Text color
+            #item.setBackground(QColor("#2e2e2e"))  # Dark background
+            #item.setForeground(QColor("#ffffff"))  # Text color
             item.setText(imagePath)
             self.globalImageModel.appendRow(item)
             
