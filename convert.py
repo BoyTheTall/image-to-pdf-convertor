@@ -54,11 +54,15 @@ def create_output_file_name(images_dir_folder):
     else:
         return images_dir_folder.split("\\")[-1]
     
-
+def convert_multiple_images_with_specified_file_path(images, filepath):
+    with open(filepath, "wb") as f:
+        f.write(im.convert(images, rotation=im.Rotation.ifvalid))
+    
 class ConvertorUI(QtWidgets.QMainWindow):
     globalImageList = []
+    folder = None #use this if the user opened a filder first, otherwise they must specify the directory and details when it is time to save a pdf
+    isInFolderMode = False #use his as a flag to see if we need to save the folder path
     defaultFileDirectoryText =  None
-    globalImageModel = None #this is for the qListView 
     
     def __init__(self):
         super(ConvertorUI, self).__init__()
@@ -66,7 +70,7 @@ class ConvertorUI(QtWidgets.QMainWindow):
         self.show()
         self.defaultFileDirectoryText = self.lblFileDirectory.text()
         #Image models
-        self.globalImageModel = QStandardItemModel()
+        
         self.tblImagesList.setFlow(QtWidgets.QListView.Flow.TopToBottom)
         self.tblImagesList.setMovement(QtWidgets.QListView.Movement.Snap)
         self.tblImagesList.setViewMode(QtWidgets.QListView.ViewMode.ListMode)
@@ -94,13 +98,22 @@ class ConvertorUI(QtWidgets.QMainWindow):
     
     def openImage(self):
         self.openFile(add_to_existing_list=False)
+        self.folder = None
+        self.isInFolderMode = False
     
     def btnOpenFolderFunction(self):
         self.openFolder(add_to_existing_list=False)
         self.addImagesToListView()
     
     def btnSaveFileFunction(self):
-        self.saveFileDialog()
+        message = "Do you wish to specify the file name and folder it will be save in?"
+        title = "Hmm :/"
+        specifyOutputFileConfirmation = messages.display_option_message(message=message, title=title)
+        if specifyOutputFileConfirmation:
+            filepath = self.saveFileDialog()
+            imagesList = self.getImages()
+            convert_multiple_images_with_specified_file_path(images=imagesList, filepath=filepath)
+            messages.display_message("Job done comrade", "yay", messages.INFO_MSG)
           
     def openFileDialogue(self, folder_mode=True):
         dialog = QtWidgets.QFileDialog(self)
@@ -132,6 +145,8 @@ class ConvertorUI(QtWidgets.QMainWindow):
     
     def openFolder(self, add_to_existing_list = False):
         folder = self.openFileDialogue()
+        self.isInFolderMode = True
+        self.folder = folder
         if(folder != None):
             message = "Sort image list automatically?"
             result = messages.display_option_message(message, "Sort Do I?")
@@ -158,20 +173,32 @@ class ConvertorUI(QtWidgets.QMainWindow):
         dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptMode.AcceptSave)
         if dialog.exec():
             filename = dialog.selectedFiles()
-            print(filename)
-            return filename[0]
+            return (filename[0] + ".pdf")
     
     def addImagesToListView(self):
+        imageModel = QStandardItemModel()
         for imagePath in self.globalImageList:
             item = QStandardItem()
             item.setIcon(QIcon(imagePath))
             #item.setBackground(QColor("#2e2e2e"))  # Dark background
             #item.setForeground(QColor("#ffffff"))  # Text color
             item.setText(imagePath)
-            self.globalImageModel.appendRow(item)
+            item.setData(imagePath)
+            imageModel.appendRow(item)
             
-        self.tblImagesList.setModel(self.globalImageModel)
+        self.tblImagesList.setModel(imageModel)
         
+    def getImages(self):
+        imagesToBeSavedList = []
+        imageModelFromQlistView = self.tblImagesList.model()
+        for row in range(imageModelFromQlistView.rowCount()):
+            item = imageModelFromQlistView.item(row)
+            imageFilePath = item.text()
+            print(imageFilePath)
+            imagesToBeSavedList.append(imageFilePath)
+        
+        return imagesToBeSavedList
+            
 def launch():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
