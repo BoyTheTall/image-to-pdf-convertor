@@ -1,3 +1,4 @@
+import re, io
 import img2pdf as im
 import PIL
 import os, sys
@@ -7,6 +8,10 @@ from PyQt6.QtWidgets import QApplication, QAbstractItemView
 from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon
 import messages
 #add the filters so that the save file type is automatically a pdf
+def extract_numbers(stringlist):
+    match = re.search(r'(\d+)(?=\.\w+$)', stringlist)
+    return int(match.group()) if match else float('inf')
+
 def create_folder(folder_dir):#forgot what this function was used for
     try:
         os.mkdir(folder_dir)
@@ -17,15 +22,21 @@ def create_folder(folder_dir):#forgot what this function was used for
     except Exception as e:
         print(f"an exception occured: {e}")
 
-def convert_single_image_to_pdf(image_dir, output_folder):
-    create_folder(output_folder)
+def convert_single_image_to_image_without_alpha(image_dir):
     image = PIL.Image.open(image_dir)
-    pdf_bytes = im.convert(image.filename)
-    file = open(output_folder + f"/{image.filename.split('.')[0]}.pdf", 'wb')
-    file.write(pdf_bytes)
-    image.close()
-    file.close()
-    print("converted image successfully")
+    pdf_bytes = None
+    if image.mode == 'RGBA':
+        rgbImage = PIL.Image.new("RGB", image.size, (255, 255, 255))
+        rgbImage.paste(image, mask=image.split()[3])
+        inMemoryFile = io.BytesIO()
+        rgbImage.save(inMemoryFile, format="PNG")
+        imageBytes = inMemoryFile.getvalue()
+        pdf_bytes = im.convert(imageBytes, rotation=im.Rotation.ifvalid)
+        return pdf_bytes
+    else:
+        pdf_bytes = im.convert(image.filename, rotation=im.Rotation.ifvalid)
+        return pdf_bytes
+        
 
 #sorts by default
 def generate_image_list(images_dir_folder, sort_pictures=True):
@@ -39,14 +50,20 @@ def generate_image_list(images_dir_folder, sort_pictures=True):
             continue
         images.append(path)
     if sort_pictures == True:
-        images.sort()
+        images.sort(key=extract_numbers)
     return images
 
 #this grabs the images in a folder and sorts them before conversion
 def convert_multiple_images(images, output_folder, filename):
-    create_folder(output_folder)
-    with open(f"{output_folder}/{filename}.pdf", "wb") as f:
-        f.write(im.convert(images))
+    if len(images) !=0:
+        create_folder(output_folder)
+        with open(f"{output_folder}/{filename}.pdf", "wb") as f:
+            try:
+                f.write(im.convert(images), rotation=im.Rotation.ifvalid)
+            except im.AlphaChannelError as alphaError:
+                print(alphaError)
+                for image in images:
+                    f.write(convert_single_image_to_image_without_alpha(image))
     
 def create_output_file_name(images_dir_folder):
     if '/' in images_dir_folder:
@@ -55,8 +72,14 @@ def create_output_file_name(images_dir_folder):
         return images_dir_folder.split("\\")[-1]
     
 def convert_multiple_images_with_specified_file_path(images, filepath):
-    with open(filepath, "wb") as f:
-        f.write(im.convert(images, rotation=im.Rotation.ifvalid))
+    if len(images) != 0:
+        with open(filepath, "wb") as f:
+            try:
+                f.write(im.convert(images, rotation=im.Rotation.ifvalid))
+            except im.AlphaChannelError as alphaError:
+                print(alphaError)
+                for image in images:
+                    f.write(convert_single_image_to_image_without_alpha(image))
     
 class ConvertorUI(QtWidgets.QMainWindow):
     globalImageList = []
@@ -89,6 +112,7 @@ class ConvertorUI(QtWidgets.QMainWindow):
         self.btnAddFolder.clicked.connect(self.addFolder)
         self.btnAddImage.clicked.connect(self.addImage)
         self.btnSavePDF.clicked.connect(self.btnSaveFileFunction)
+        self.btnBatch.clicked.connect(self.batch_Mode_function)
     
     def addImage(self):
         self.openFile(add_to_existing_list=True)
@@ -120,21 +144,19 @@ class ConvertorUI(QtWidgets.QMainWindow):
             if specifyOutputFileConfirmation:#assuming its in folder mode
                 filepath = self.saveFileDialog()  
                 convert_multiple_images_with_specified_file_path(images=imagesList, filepath=filepath)
-                messages.display_message("Job done comrade", "yay", messages.INFO_MSG)
+                messages.display_message(f"PDF created sucessfully. File is found at {filepath}", "yay", messages.INFO_MSG)
         
             else: #still assuming folder mode
                 filename = create_output_file_name(self.folder)
                 convert_multiple_images(imagesList, self.folder, filename)
                 title = "Yeeeeeeeeaaaaaaaaaaaaaah"
-                message = f"PDF created successfully. File is found at {self.folder}/{filename}"
+                message = f"PDF created successfully. File is found at {self.folder}/{filename}.pdf"
                 messages.display_message(message=message, title=title, message_type=messages.INFO_MSG)
         else: 
             #is in single file mode. use will specify the output directory (meaning the user didnt click the open folder button first)
             filepath = self.saveFileDialog()  
             convert_multiple_images_with_specified_file_path(images=imagesList, filepath=filepath)
-            messages.display_message("Job done comrade", "yay", messages.INFO_MSG)
-            
-            
+            messages.display_message("Job done comrade", "yay", messages.INFO_MSG)         
           
     def openFileDialogue(self, folder_mode=True):
         dialog = QtWidgets.QFileDialog(self)
@@ -223,11 +245,34 @@ class ConvertorUI(QtWidgets.QMainWindow):
         for row in range(imageModelFromQlistView.rowCount()):
             item = imageModelFromQlistView.item(row)
             imageFilePath = item.text()
-            print(imageFilePath)
             imagesToBeSavedList.append(imageFilePath)
         
         return imagesToBeSavedList
-            
+    
+    def batch_Mode_function(self):
+        dialog = QtWidgets.QFileDialog(self)
+        dialog.setFileMode(QtWidgets.QFileDialog.FileMode.Directory)
+        if dialog.exec():
+            sourceFolder = dialog.selectedFiles()[0] # source folder
+            folders = [f for f in os.listdir(sourceFolder) if os.path.isdir(os.path.join(sourceFolder, f))]
+            outputFolder = sourceFolder + "\\output"
+            create_folder(outputFolder)
+            originalProgressLabelText = self.lblBatchModeProgress.text()
+            totalFolders = len(folders)
+            foldersDone = 0
+            for folder in folders:
+                self.lblBatchModeProgress.setText(f"{originalProgressLabelText}: ({foldersDone}/{totalFolders})")
+                currentDirectory = f"{sourceFolder}\\{folder}" # we are getting the images here
+                images = generate_image_list(currentDirectory)
+                outputfilename = create_output_file_name(folder)
+                print(outputfilename)
+                convert_multiple_images_with_specified_file_path(images, f"{outputFolder}/{outputfilename}.pdf")
+                foldersDone+=1
+            title = "Batch Report"
+            message = f"Job done. check the {outputFolder} directory for your files"
+            messages.display_message(message=message, title=title, message_type=messages.INFO_MSG)
+        
+        
 def launch():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
