@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import QApplication, QAbstractItemView
 from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon
 import messages
 #add the filters so that the save file type is automatically a pdf
-def create_folder(folder_dir):
+def create_folder(folder_dir):#forgot what this function was used for
     try:
         os.mkdir(folder_dir)
     except FileExistsError:
@@ -31,7 +31,7 @@ def convert_single_image_to_pdf(image_dir, output_folder):
 def generate_image_list(images_dir_folder, sort_pictures=True):
     images = []
     for fname in os.listdir(images_dir_folder):
-        if not fname.endswith((".jpg", ".png", ".jpeg")):
+        if not fname.endswith((".jpg", ".png", ".jpeg", ".webp")):
             continue
         
         path = os.path.join(images_dir_folder, fname)
@@ -91,29 +91,50 @@ class ConvertorUI(QtWidgets.QMainWindow):
         self.btnSavePDF.clicked.connect(self.btnSaveFileFunction)
     
     def addImage(self):
-          self.openFile(add_to_existing_list=True)
+        self.openFile(add_to_existing_list=True)
+        self.addImagesToListView()
               
     def addFolder(self):
         self.openFolder(add_to_existing_list=True)
+        self.addImagesToListView()
     
     def openImage(self):
         self.openFile(add_to_existing_list=False)
         self.folder = None
         self.isInFolderMode = False
+        self.addImagesToListView()
     
     def btnOpenFolderFunction(self):
+        self.isInFolderMode = False
+        self.folder = None
         self.openFolder(add_to_existing_list=False)
         self.addImagesToListView()
     
     def btnSaveFileFunction(self):
-        message = "Do you wish to specify the file name and folder it will be save in?"
-        title = "Hmm :/"
-        specifyOutputFileConfirmation = messages.display_option_message(message=message, title=title)
-        if specifyOutputFileConfirmation:
-            filepath = self.saveFileDialog()
-            imagesList = self.getImages()
+        imagesList = self.getImages()
+                
+        if self.isInFolderMode:
+            message = "Do you wish to specify the file name and folder it will be save in?"
+            title = "Hmm :/"
+            specifyOutputFileConfirmation = messages.display_option_message(message=message, title=title)
+            if specifyOutputFileConfirmation:#assuming its in folder mode
+                filepath = self.saveFileDialog()  
+                convert_multiple_images_with_specified_file_path(images=imagesList, filepath=filepath)
+                messages.display_message("Job done comrade", "yay", messages.INFO_MSG)
+        
+            else: #still assuming folder mode
+                filename = create_output_file_name(self.folder)
+                convert_multiple_images(imagesList, self.folder, filename)
+                title = "Yeeeeeeeeaaaaaaaaaaaaaah"
+                message = f"PDF created successfully. File is found at {self.folder}/{filename}"
+                messages.display_message(message=message, title=title, message_type=messages.INFO_MSG)
+        else: 
+            #is in single file mode. use will specify the output directory (meaning the user didnt click the open folder button first)
+            filepath = self.saveFileDialog()  
             convert_multiple_images_with_specified_file_path(images=imagesList, filepath=filepath)
             messages.display_message("Job done comrade", "yay", messages.INFO_MSG)
+            
+            
           
     def openFileDialogue(self, folder_mode=True):
         dialog = QtWidgets.QFileDialog(self)
@@ -145,8 +166,7 @@ class ConvertorUI(QtWidgets.QMainWindow):
     
     def openFolder(self, add_to_existing_list = False):
         folder = self.openFileDialogue()
-        self.isInFolderMode = True
-        self.folder = folder
+        
         if(folder != None):
             message = "Sort image list automatically?"
             result = messages.display_option_message(message, "Sort Do I?")
@@ -155,14 +175,18 @@ class ConvertorUI(QtWidgets.QMainWindow):
                     self.globalImageList = self.globalImageList + generate_image_list(folder[0])
                        
                 else:
+                    self.isInFolderMode = True
+                    self.folder = folder[0]
                     self.globalImageList.clear()
                     self.globalImageList = generate_image_list(folder[0])
                 
             else: #unsorted images
                 if add_to_existing_list:
-                    self.globalImageList.append(generate_image_list(sort_pictures=False))
-                else:    
-                    self.globalImageList = generate_image_list(sort_pictures=False)
+                    self.globalImageList.append(generate_image_list(folder[0], sort_pictures=False))
+                else:
+                    self.isInFolderMode = True
+                    self.folder = folder[0]
+                    self.globalImageList = generate_image_list(folder[0],sort_pictures=False)
         else:
             message = "No folder was selected"
             title = "Error :'("
@@ -173,7 +197,12 @@ class ConvertorUI(QtWidgets.QMainWindow):
         dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptMode.AcceptSave)
         if dialog.exec():
             filename = dialog.selectedFiles()
-            return (filename[0] + ".pdf")
+            if(len(filename) != 0):
+                return (filename[0] + ".pdf")
+            else:
+                messages.display_message("No file name specified", "did you forgor", messages.ERROR_MSG)
+        else:
+            messages.display_message("Operation canceled", ":(", messages.ERROR_MSG)
     
     def addImagesToListView(self):
         imageModel = QStandardItemModel()
